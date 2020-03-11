@@ -1,2 +1,0 @@
-.L ZptCorrection.C
-GetZptReweight()

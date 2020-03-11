@@ -1,2 +1,6 @@
 ntuples/
 hists/
+*.root
+*.png
+*.swp
+*.log

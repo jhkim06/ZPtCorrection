@@ -1,23 +1,45 @@
-void GetZptReweight(bool isElectron = true, TString histFile = "hists/ISR_detector_plots_electron.root")
+void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = "hists/ISR_detector_plots_electron.root")
 {
     gROOT->SetBatch();
     TH1::AddDirectory(kFALSE);
 
     // Input histograms for Data and Backgrounds at reconstruction level
-    if(!isElectron) 
+    if(!isElectron)
     {
         histFile = "hists/ISR_detector_plots_muon.root";
     }
     TFile fhist(histFile);
     // Output file
     TString output_postfix = "electron";
+    TString massBinStr = "m80to100";
+    if(massBin ==0)
+    {
+        massBinStr = "m50to65";
+        if(!isElectron)
+            massBinStr = "m40to60";
+    }
+    if(massBin ==1)
+    {
+        massBinStr = "m65to80";
+        if(!isElectron)
+            massBinStr = "m60to80";
+    }
+    if(massBin ==3)
+    {
+        massBinStr = "m100to200";
+    }
+    if(massBin ==4)
+    {
+        massBinStr = "m200to350";
+    }
+
     if(!isElectron)
     {
         output_postfix = "muon";
     }
 
-    TFile outfile("ZptWeight_"+output_postfix+".root","UPDATE");
-    
+    TFile outfile("ZptWeight_"+output_postfix+"_"+massBinStr+".root","UPDATE");
+
 
     TH1* hDYPtReweighted = NULL;
 
@@ -51,12 +73,12 @@ void GetZptReweight(bool isElectron = true, TString histFile = "hists/ISR_detect
         hZptWeight_temp = (TH1*)outfile.Get("ZptWeightInputFor_iter"+current_iter_);
     }
 
-    TString dir = "detector_level_m80to100";
+    TString dir = "detector_level_"+massBinStr;
     TString dataName = "DoubleEG";
     TString channelName = "EE";
     if(isElectron == false)
     {
-        dataName = "DoubleMuon";  
+        dataName = "DoubleMuon";
         channelName = "MuMu";
     }
 
@@ -70,24 +92,27 @@ void GetZptReweight(bool isElectron = true, TString histFile = "hists/ISR_detect
     hBkgPt->Add((TH1*)fhist.Get(dir+"/ptll_variable_bin/histo_DYJetsToTauTau"));
 
     hDYPtBfReweighted=(TH1*)fhist.Get(dir+"/ptll_variable_bin/histo_DYJetsTo"+channelName);
+    hDYPtBfReweighted->Add((TH1*)fhist.Get(dir+"/ptll_variable_bin/histo_DYJets10to50To"+channelName));
     hDYPtReweighted=(TH1*)fhist.Get(dir+"/ptll_variable_bin/histo_DYJetsTo"+channelName);
+    hDYPtReweighted->Add((TH1*)fhist.Get(dir+"/ptll_variable_bin/histo_DYJets10to50To"+channelName));
 
-    if(hZptWeight_temp != NULL) 
+    if(hZptWeight_temp != NULL)
     {
         cout << "Get " + previous_iter_ + " th reweighted DY histogram..." << endl;
         hDYPtReweighted_previous=(TH1*)outfile.Get("hDYReweighted_iter" + previous_iter_);
     }
-    else 
+    else
     {
         hDYPtReweighted_previous=(TH1*)fhist.Get(dir+"/ptll_variable_bin/histo_DYJetsTo"+channelName);
+        hDYPtReweighted_previous->Add((TH1*)fhist.Get(dir+"/ptll_variable_bin/histo_DYJets10to50To"+channelName));
     }
-   
+
     if(hZptWeight_temp == NULL)
-    { 
+    {
         cout << "No previous ZptWeight exits..." << endl;
         hZptWeight_temp=(TH1*)fhist.Get(dir+"/ptll_variable_bin/histo_"+dataName);
         hZptWeight_temp->Add(hBkgPt, -1);                   // Subtract bkg from data
-        hZptWeight_temp->Divide(hDYPtBfReweighted);  
+        hZptWeight_temp->Divide(hDYPtBfReweighted);
     }
 
     TCanvas* c1=new TCanvas("c1", "c1", 50, 50, 750, 550);
@@ -98,7 +123,7 @@ void GetZptReweight(bool isElectron = true, TString histFile = "hists/ISR_detect
     c1->SaveAs("comparison.png");
     delete c1;
 
-    // DY MC tree 
+    // DY MC tree
     // Reconstruction level variables
     bool evt_tag_analysisevnt_sel_rec;
     bool evt_tag_dielectron_rec;
@@ -127,59 +152,58 @@ void GetZptReweight(bool isElectron = true, TString histFile = "hists/ISR_detect
 
     Long64_t nentries;
 
+    TTree* tsignal;
+
+    TChain * chain = new TChain("recoTree/SKFlat","ZptCorrection");
+    string line;
+    ifstream myfile("/home/jhkim/ISR_Run2/ZptCorrection/2016ISR/ntuples/list.txt");
+    if (myfile.is_open())
+    {
+        while ( getline (myfile,line) )
+        {
+            if( line.length() != 0 )
+            {
+                cout << line << '\n';
+                char file_path[300];
+                strcpy(file_path, line.c_str());
+                chain->Add(file_path);
+            }
+        }
+        myfile.close();
+    }
+    tsignal = chain;
+
+    tsignal->SetBranchAddress("evt_tag_analysisevnt_sel_rec_Nominal",&evt_tag_analysisevnt_sel_rec);
+    tsignal->SetBranchAddress("evt_tag_dielectron_rec_Nominal",&evt_tag_dielectron_rec);
+    tsignal->SetBranchAddress("evt_tag_dimuon_rec_Nominal",&evt_tag_dimuon_rec);
+    tsignal->SetBranchAddress("evt_weight_total_rec",&evt_weight_total_rec);
+    tsignal->SetBranchAddress("evt_weight_recoSF_rec_Nominal",&evt_weight_recoSF_rec);
+    tsignal->SetBranchAddress("evt_weight_idSF_rec_Nominal",&evt_weight_idSF_rec);
+    tsignal->SetBranchAddress("evt_weight_isoSF_rec_Nominal",&evt_weight_isoSF_rec);
+    tsignal->SetBranchAddress("evt_weight_trigSF_rec_Nominal",&evt_weight_trigSF_rec);
+    tsignal->SetBranchAddress("evt_weight_trigSFDZ_rec_Nominal",&evt_weight_trigSFDZ_rec);
+    tsignal->SetBranchAddress("dilep_pt_rec_Nominal",&dilep_pt_rec);
+    tsignal->SetBranchAddress("dilep_mass_rec_Nominal",&dilep_mass_rec);
+
+    tsignal->SetBranchAddress("evt_tag_ditau_hardprocess",&evt_tag_ditau_hardprocess);
+    tsignal->SetBranchAddress("evt_tag_dielectron_hardprocess",&evt_tag_dielectron_hardprocess);
+    tsignal->SetBranchAddress("evt_tag_dimuon_hardprocess",&evt_tag_dimuon_hardprocess);
+    tsignal->SetBranchAddress("evt_tag_dimuon_promptfinal",&evt_tag_dimuon_promptfinal);
+    tsignal->SetBranchAddress("evt_tag_dielectron_promptfinal",&evt_tag_dielectron_promptfinal);
+    tsignal->SetBranchAddress("dilep_pt_FSRgamma_gen_ispromptfinal",&dilep_pt_FSRgamma_gen_ispromptfinal);
+    tsignal->SetBranchAddress("dilep_mass_FSRgamma_gen_ispromptfinal",&dilep_mass_FSRgamma_gen_ispromptfinal);
+    tsignal->SetBranchAddress("evt_weight_total_gen",&evt_weight_total_gen);
+
+    nentries=tsignal->GetEntries();
+
     do
     {
         cout << "Start " << iter+1 << " th iteration..." << endl;
-        if(hZptWeight != NULL)
-        {
-            hZptWeight->Reset(); // Reset after the first iteration
-        }
 
-        hDYPtReweighted->Reset(); // Reset before apply the current Z pt reweight in this iteration
+        TH1* hDYPtReweighted_temp;
+        hDYPtReweighted_temp = (TH1*)hDYPtReweighted->Clone("hDYReweighted_temp");
+        hDYPtReweighted_temp->Reset(); // Reset before apply the current Z pt reweight in this iteration
 
-        TTree* tsignal;
-
-        TChain * chain = new TChain("recoTree/SKFlat","ZptCorrection");
-        string line;
-        ifstream myfile("/home/jhkim/ISR_Run2/ZptCorrection/2016ISR/ntuples/list.txt");
-        if (myfile.is_open())
-        {
-            while ( getline (myfile,line) )
-            {
-                if( line.length() != 0 )
-                {
-                    cout << line << '\n';
-                    char file_path[300];
-                    strcpy(file_path, line.c_str());
-                    chain->Add(file_path);
-                }
-            }
-            myfile.close();
-        }
-        tsignal = chain;
-
-        tsignal->SetBranchAddress("evt_tag_analysisevnt_sel_rec_Nominal",&evt_tag_analysisevnt_sel_rec);
-        tsignal->SetBranchAddress("evt_tag_dielectron_rec_Nominal",&evt_tag_dielectron_rec);
-        tsignal->SetBranchAddress("evt_tag_dimuon_rec_Nominal",&evt_tag_dimuon_rec);
-        tsignal->SetBranchAddress("evt_weight_total_rec",&evt_weight_total_rec);
-        tsignal->SetBranchAddress("evt_weight_recoSF_rec_Nominal",&evt_weight_recoSF_rec);
-        tsignal->SetBranchAddress("evt_weight_idSF_rec_Nominal",&evt_weight_idSF_rec);
-        tsignal->SetBranchAddress("evt_weight_isoSF_rec_Nominal",&evt_weight_isoSF_rec);
-        tsignal->SetBranchAddress("evt_weight_trigSF_rec_Nominal",&evt_weight_trigSF_rec);
-        tsignal->SetBranchAddress("evt_weight_trigSFDZ_rec_Nominal",&evt_weight_trigSFDZ_rec);
-        tsignal->SetBranchAddress("dilep_pt_rec_Nominal",&dilep_pt_rec);
-        tsignal->SetBranchAddress("dilep_mass_rec_Nominal",&dilep_mass_rec);
-
-        tsignal->SetBranchAddress("evt_tag_ditau_hardprocess",&evt_tag_ditau_hardprocess);
-        tsignal->SetBranchAddress("evt_tag_dielectron_hardprocess",&evt_tag_dielectron_hardprocess);
-        tsignal->SetBranchAddress("evt_tag_dimuon_hardprocess",&evt_tag_dimuon_hardprocess);
-        tsignal->SetBranchAddress("evt_tag_dimuon_promptfinal",&evt_tag_dimuon_promptfinal);
-        tsignal->SetBranchAddress("evt_tag_dielectron_promptfinal",&evt_tag_dielectron_promptfinal);
-        tsignal->SetBranchAddress("dilep_pt_FSRgamma_gen_ispromptfinal",&dilep_pt_FSRgamma_gen_ispromptfinal);
-        tsignal->SetBranchAddress("dilep_mass_FSRgamma_gen_ispromptfinal",&dilep_mass_FSRgamma_gen_ispromptfinal);
-        tsignal->SetBranchAddress("evt_weight_total_gen",&evt_weight_total_gen);
-
-        nentries=tsignal->GetEntries();
         cout<<"start signal loop"<<endl;
         for(Long64_t i=0;i<nentries;i++)
         //for(int i=0;i<100000;i++)
@@ -202,17 +226,49 @@ void GetZptReweight(bool isElectron = true, TString histFile = "hists/ISR_detect
                 if(!isElectron)
                 {
                     recChannel = evt_tag_dimuon_rec;
-                    evt_weight_total_gen*evt_weight_total_rec*evt_weight_isoSF_rec*evt_weight_idSF_rec*evt_weight_trigSF_rec;
+                    totWeight = evt_weight_total_gen*evt_weight_total_rec*evt_weight_isoSF_rec*evt_weight_idSF_rec*evt_weight_trigSF_rec;
                 }
 
-                if(evt_tag_analysisevnt_sel_rec && recChannel)      // TODO option for muon 
+                if(evt_tag_analysisevnt_sel_rec && recChannel)      // TODO option for muon
                 {
-                    if(dilep_mass_rec > 80. && dilep_mass_rec < 100.)
+                    double low_mass = 80.;
+                    double high_mass = 100.;
+                    if(massBin ==0)
+                    {
+                        low_mass = 50.;
+                        high_mass = 65.;
+                        if(!isElectron)
+                        {
+                            low_mass = 40.;
+                            high_mass = 60.;
+                        }
+                    }
+                    if(massBin ==1)
+                    {
+                        low_mass = 65.;
+                        high_mass = 80.;
+                        if(!isElectron)
+                        {
+                            low_mass = 60.;
+                            high_mass = 80.;
+                        }
+                    }
+                    if(massBin ==3)
+                    {
+                        low_mass = 100.;
+                        high_mass = 200.;
+                    }
+                    if(massBin ==4)
+                    {
+                        low_mass = 200.;
+                        high_mass = 350.;
+                    }
+                    if(dilep_mass_rec > low_mass && dilep_mass_rec < high_mass && dilep_pt_rec < 100.)
                     {
                         if( GenZpt > 100.) GenZpt = 99.5;
                         int bin = hZptWeight_temp->FindBin(GenZpt);
                         Double_t zpt_weight = hZptWeight_temp->GetBinContent(bin);
-                        hDYPtReweighted->Fill(dilep_pt_rec, totWeight*zpt_weight); // TODO add option for muon
+                        hDYPtReweighted_temp->Fill(dilep_pt_rec, totWeight*zpt_weight);
                     }// Z peak
                 }
             }
@@ -221,10 +277,10 @@ void GetZptReweight(bool isElectron = true, TString histFile = "hists/ISR_detect
         TString iter_; iter_.Form("%d",iter);
 
         double norm_;
-        norm_ = hDYPtBfReweighted->Integral()/ hDYPtReweighted->Integral();
+        norm_ = hDYPtBfReweighted->Integral()/ hDYPtReweighted_temp->Integral();
         cout << "norm: " << norm_ << endl;
-        hDYPtReweighted->Scale(norm_);
-        hDYPtReweighted->SetName("hDYReweighted_iter" + iter_);
+        hDYPtReweighted_temp->Scale(norm_);
+        hDYPtReweighted_temp->SetName("hDYReweighted_iter" + iter_);
         hZptWeight_temp->Scale(norm_);
 
         // Update reweight histogram
@@ -235,9 +291,9 @@ void GetZptReweight(bool isElectron = true, TString histFile = "hists/ISR_detect
         hBkgPt_temp=(TH1*)hBkgPt->Clone("hBkgPt_temp");
 
         hDataPt_temp->Add(hBkgPt_temp, -1);
-        hDataPt_temp->Divide(hDYPtReweighted); // Next weight before NORMALISATION applied
+        hDataPt_temp->Divide(hDYPtReweighted_temp); // Next weight before NORMALISATION applied
 
-        // Save weight and normalisation information
+        // Save weight and normalisation information, this can be used for reweighting
         hZptWeight = (TH1*)hZptWeight_temp->Clone("ZptWeight_iter" + iter_);
 
         for(int bin = 1; bin < hZptWeight_temp->GetNbinsX()+1; bin++)
@@ -247,30 +303,36 @@ void GetZptReweight(bool isElectron = true, TString histFile = "hists/ISR_detect
             cout << bin << " th bin.." << " next weight: " << hZptWeight_temp->GetBinContent(bin) << " current weight: " << current_weight << endl;
         }
         TString next_iter_; next_iter_.Form("%d",iter + 1);
-        TH1* hZptWeightInputForNextIter = (TH1*)hZptWeight_temp->Clone("ZptWeightInputFor_iter" + next_iter_); 
+        TH1* hZptWeightInputForNextIter = (TH1*)hZptWeight_temp->Clone("ZptWeightInputFor_iter" + next_iter_);
 
         // TODO save this comparison
         TH1* hDYPt_comparison = (TH1*)hDYPtReweighted_previous->Clone("hDYcomparison_iter"+ iter_);
-        hDYPt_comparison->Divide(hDYPtReweighted);
+        hDYPt_comparison->Divide(hDYPtReweighted_temp);
         hDYPtReweighted_previous->Reset(); // Reset for next iteration
-        hDYPtReweighted_previous->Add(hDYPtReweighted); // Save current ZPt reweighted histogram
+        hDYPtReweighted_previous->Add(hDYPtReweighted_temp); // Save current ZPt reweighted histogram
 
         cout << iter << " th iteration finished " << endl;
 
         outfile.cd();
         hZptWeight->Write();
         hZptWeightInputForNextIter->Write();
-        hDYPtReweighted->Write();
+        hDYPtReweighted_temp->Write();
         hDYPt_comparison->Write();
 
         delete hDataPt_temp;
         delete hBkgPt_temp;
+        delete hZptWeight;
+        delete hDYPtReweighted_temp;
+        delete hDYPt_comparison;
+        delete hZptWeightInputForNextIter;
+        //delete tsignal;
     }
     while(iter!=10); // TODO add condition to exit
+    delete chain;
 
     std::cout << "initial N: " << hDYPtBfReweighted->Integral() << " final N: " << hDYPtReweighted->Integral() << std::endl;
 
     outfile.cd();
-    outfile.Close(); 
+    outfile.Close();
 }
 
