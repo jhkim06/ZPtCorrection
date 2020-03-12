@@ -115,14 +115,6 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         hZptWeight_temp->Divide(hDYPtBfReweighted);
     }
 
-    TCanvas* c1=new TCanvas("c1", "c1", 50, 50, 750, 550);
-    c1->cd();
-    hZptWeight_temp->Draw();
-    hZptWeight_temp->SetMinimum(0.8);
-    hZptWeight_temp->SetMaximum(1.2);
-    c1->SaveAs("comparison.png");
-    delete c1;
-
     // DY MC tree
     // Reconstruction level variables
     bool evt_tag_analysisevnt_sel_rec;
