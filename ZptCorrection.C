@@ -419,9 +419,8 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         delete hZptWeightInputForNextIter;
         //delete tsignal;
     }
-    while(iter != 10); // TODO add condition to exit
+    while(iter != 1); // TODO add condition to exit
     delete chain;
-
 
     outfile.cd();
     outfile.Close();
