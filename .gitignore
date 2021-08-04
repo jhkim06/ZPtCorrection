@@ -4,3 +4,6 @@ hists/
 *.png
 *.swp
 *.log
+*.d
+*.pcm
+*.so

@@ -426,6 +426,7 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         for(int ibin = 1; ibin <= hDYPtReweighted_temp->GetXaxis()->GetNbins(); ibin++)
         {
             int bin_number;
+            // #[^\s]+ \(Rec_Pt:mass\[[^\s]+]:pt\[[^\s]+]\) 
             string temp_cuurent_bin_name(pt_binning_Rec->GetBinName(ibin));
             string current_mass_bin_name = temp_cuurent_bin_name.substr(temp_cuurent_bin_name.find("mass[")+5, temp_cuurent_bin_name.find("]:pt[")-temp_cuurent_bin_name.find("mass[")-5);
             string temp_next_bin_name(pt_binning_Rec->GetBinName(ibin+1));
