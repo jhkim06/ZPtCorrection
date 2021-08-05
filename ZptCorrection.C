@@ -111,6 +111,7 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
     TH1* hZptWeight = NULL;
     TH1* hZptWeight_temp = NULL;
     TH1* hDYPtBfReweighted = NULL;
+    TH1* hDYPtBfReweighted_from_tree = NULL;
     TH1* hDYPtReweighted_previous = NULL;
     TH1* hZptWeight_temp_m81to101 = NULL;
 
@@ -275,10 +276,10 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
     {
         cout << "Start " << iter+1 << " th iteration..." << endl;
 
-        // Get Z pT weight for each mass bin seperately
         TH1* hDYPtReweighted_temp;
         cout << "Histogram created using TUnfold package!" << endl;
         hDYPtReweighted_temp = pt_binning_Rec->CreateHistogram("hDYReweighted_temp");
+        if(iter==0) hDYPtBfReweighted_from_tree = pt_binning_Rec->CreateHistogram("hDYPtBfReweighted_from_tree");
 
         cout<<"Start signal loop"<<endl;
         for(Long64_t i=0;i<nentries;i++)
@@ -287,69 +288,61 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
             tsignal->GetEntry(i);
             if(i%10000000==0) cout<<i<< " /" << nentries << " (" << (double)(100.*i/nentries) << "%)" << endl;
 
-            if(evt_tag_ditau_hardprocess == false)
+            Double_t GenZpt = 0., GenZmass = 0.;          
+            if(isElectron && !evt_tag_dielectron_promptfinal) continue;
+            if(!isElectron && !evt_tag_dimuon_promptfinal) continue;
+            // No tautau event saved in the input tree
+
+            GenZpt   = dilep_pt_FSRgamma_gen_ispromptfinal;
+            GenZmass = dilep_mass_FSRgamma_gen_ispromptfinal;
+
+            if(GenZpt < 0 || GenZmass < 0 ) continue;
+
+
+            bool recChannel = evt_tag_dielectron_rec;
+            Double_t totWeight = evt_weight_total_gen*evt_weight_total_rec*evt_weight_recoSF_rec*evt_weight_idSF_rec*evt_weight_trigSF_rec*evt_weight_trigSFDZ_rec;
+            if(!isElectron)
             {
-                Double_t GenZpt = 0., GenZmass = 0.;          
-                if(evt_tag_ditau_hardprocess) continue; 
-                if(isElectron)
-                    if(evt_tag_dimuon_hardprocess) continue;
-                if(!isElectron)
-                    if(evt_tag_dielectron_hardprocess) continue;
-                // No tautau event saved in the input tree
+                recChannel = evt_tag_dimuon_rec;
+                totWeight = evt_weight_total_gen*evt_weight_total_rec*evt_weight_isoSF_rec*evt_weight_idSF_rec*evt_weight_trigSF_rec;
+            }
 
-                GenZpt   = dilep_pt_FSRgamma_gen_ispromptfinal;
-                GenZmass = dilep_mass_FSRgamma_gen_ispromptfinal;
-
-                if(GenZpt < 0 || GenZmass < 0 ) continue;
-
-                // TODO Get mass also!
-
-                bool recChannel = evt_tag_dielectron_rec;
-                Double_t totWeight = evt_weight_total_gen*evt_weight_total_rec*evt_weight_recoSF_rec*evt_weight_idSF_rec*evt_weight_trigSF_rec*evt_weight_trigSFDZ_rec;
-                if(!isElectron)
+            if(evt_tag_analysisevnt_sel_rec && recChannel)      // TODO require generator cuts 
+            {
+                double low_mass = 15.;
+                double high_mass = 3000.;
+                if(dilep_mass_rec > low_mass && dilep_mass_rec < high_mass && dilep_pt_rec < 3000.)
                 {
-                    recChannel = evt_tag_dimuon_rec;
-                    totWeight = evt_weight_total_gen*evt_weight_total_rec*evt_weight_isoSF_rec*evt_weight_idSF_rec*evt_weight_trigSF_rec;
-                }
-
-                if(evt_tag_analysisevnt_sel_rec && recChannel)      // TODO require generator cuts 
-                {
-                    double low_mass = 15.;
-                    double high_mass = 3000.;
-
-
-                    if(dilep_mass_rec > low_mass && dilep_mass_rec < high_mass && dilep_pt_rec < 3000.)
-                    {
-                        //     
-                        if( GenZpt > 100.) GenZpt = 99.9;
+                    //     
+                    if( GenZpt > 100.) GenZpt = 99.9;
             
-                        int bin;
-                        //double zpt_weight = fitFcn->Eval(GenZpt); // get Z pt weight from the previous fit
-                        double zpt_weight = 1.;
-                        for(TF1* fitFcn_: fitFcn)
-                        {
-                            zpt_weight *= fitFcn_->Eval(GenZpt); 
-                        }
-                        //bin = hZptWeight_temp_m81to101->FindBin(GenZpt);
-                        //zpt_weight = hZptWeight_temp_m81to101->GetBinContent(bin);
-                        if(zpt_weight == 0 ) zpt_weight = 1.;
+                    int bin;
+                    //double zpt_weight = fitFcn->Eval(GenZpt); // get Z pt weight from the previous fit
+                    double zpt_weight = 1.;
+                    for(TF1* fitFcn_: fitFcn)
+                    {
+                        zpt_weight *= fitFcn_->Eval(GenZpt); 
+                    }
+                    //bin = hZptWeight_temp_m81to101->FindBin(GenZpt);
+                    //zpt_weight = hZptWeight_temp_m81to101->GetBinContent(bin);
+                    if(zpt_weight == 0 ) zpt_weight = 1.;
 
-                        //if(fabs(zpt_weight_-zpt_weight)/ zpt_weight > 0.2)
-                        //{
-                        //    cout << "fit : " << zpt_weight_ << " bin: " << zpt_weight << endl;
-                        //    cout << "mass: " << dilep_mass_rec << " pt: " << dilep_pt_rec << "gen pt: " << GenZpt << endl;
-                        //    // fit : 94895.3 bin: 1
-                        //    // mass: 69.0003 pt: 35.6966
-                        //}
-                        //cout << "gen pt, mass: " << GenZpt << " " << GenZmass << " bin: " << bin << " weight " << zpt_weight << endl;
-                        //cout << "rec pt, mass: " << dilep_pt_rec << " " << dilep_mass_rec << endl;
+                    //if(fabs(zpt_weight_-zpt_weight)/ zpt_weight > 0.2)
+                    //{
+                    //    cout << "fit : " << zpt_weight_ << " bin: " << zpt_weight << endl;
+                    //    cout << "mass: " << dilep_mass_rec << " pt: " << dilep_pt_rec << "gen pt: " << GenZpt << endl;
+                    //    // fit : 94895.3 bin: 1
+                    //    // mass: 69.0003 pt: 35.6966
+                    //}
+                    //cout << "gen pt, mass: " << GenZpt << " " << GenZmass << " bin: " << bin << " weight " << zpt_weight << endl;
+                    //cout << "rec pt, mass: " << dilep_pt_rec << " " << dilep_mass_rec << endl;
 
-                        int recBin = pt_binning_Rec->GetGlobalBinNumber(dilep_pt_rec, dilep_mass_rec);
-                        hDYPtReweighted_temp->Fill(recBin, totWeight*zpt_weight);
-                        //hDYPtReweighted_temp->Fill(recBin, totWeight);
+                    int recBin = pt_binning_Rec->GetGlobalBinNumber(dilep_pt_rec, dilep_mass_rec);
+                    hDYPtReweighted_temp->Fill(recBin, totWeight*zpt_weight);
+                    if(iter==0) hDYPtBfReweighted_from_tree->Fill(recBin, totWeight);
+                    //hDYPtReweighted_temp->Fill(recBin, totWeight);
 
-                    }// Z peak
-                }
+                }// Z peak
             }
         }// DY loop
         iter++;
@@ -442,8 +435,12 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
 
         outfile.cd();
         // TODO Save only for the first iteration
-        hDataPt->Write(); 
-        hDYPtBfReweighted->Write();
+        if(iter==1)
+        {
+            hDataPt->Write(); 
+            hDYPtBfReweighted->Write();
+            hDYPtBfReweighted_from_tree->Write();
+        }
         hDYPtReweighted_temp->Write();
         hNormalisation_temp->Write();
 /*
@@ -461,7 +458,7 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
 
         //delete tsignal;
     }
-    while(iter != 10); // TODO add condition to exit
+    while(iter != 1); // TODO add condition to exit
     delete chain;
 
     outfile.cd();
