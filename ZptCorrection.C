@@ -181,21 +181,69 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
     if(hZptWeight_temp == NULL)
     {
         cout << "No previous ZptWeight exits..." << endl;
-        hZptWeight_temp_m81to101 = pt_binning_Rec->ExtractHistogram("histo_"+dataName + "_temp_m81to101", hDataPt, 0, true, "pt[];mass[UOC2]");
+        hZptWeight_temp = (TH1*) hDataPt->Clone("hZptWeight_temp");
 
-        hZptWeight_temp_m81to101->Scale(hDYPtBfReweighted_m81to101->Integral()/hZptWeight_temp_m81to101->Integral());
-        hZptWeight_temp_m81to101->Divide(hDYPtBfReweighted_m81to101);
+        // TODO make a function for the following normalisation procedure
+        int startBin = 1;  
+        int endBin = 1;  
+        double nominator_sum = 0.;
+        double denominator_sum = 0.; 
+        TH1* hNormalisation_temp = pt_binning_Rec->CreateHistogram("hNormalisation_temp");
+        hNormalisation_temp->Sumw2();
+        for(int ibin = 1; ibin <= hZptWeight_temp->GetXaxis()->GetNbins(); ibin++)
+        {
+            // Regular expression, #[^\s]+ \(Rec_Pt:mass\[[^\s]+]:pt\[[^\s]+]\) 
+            string temp_cuurent_bin_name(pt_binning_Rec->GetBinName(ibin));
+            string current_mass_bin_name = temp_cuurent_bin_name.substr(temp_cuurent_bin_name.find("mass[")+5, temp_cuurent_bin_name.find("]:pt[")-temp_cuurent_bin_name.find("mass[")-5);
+            string temp_next_bin_name(pt_binning_Rec->GetBinName(ibin+1));
+            string next_mass_bin_name = temp_next_bin_name.substr(temp_next_bin_name.find("mass[")+5, temp_next_bin_name.find("]:pt[")-temp_next_bin_name.find("mass[")-5);
+
+            //cout << pt_binning_Rec->GetBinName(ibin) << " mass bin name: " << current_mass_bin_name << endl;
+            //cout << mass_bin << " " << pt_bin << endl;
+            if(next_mass_bin_name.compare(current_mass_bin_name) != 0)
+            {
+
+                denominator_sum += hZptWeight_temp->GetBinContent(ibin);
+                nominator_sum += hDYPtBfReweighted->GetBinContent(ibin);
+                cout << "current mass bin name: " << current_mass_bin_name << " norminator: " << nominator_sum << " denominator: " <<  denominator_sum << endl; 
+                
+                endBin = ibin;
+                for(int jbin = startBin; jbin <= endBin; jbin++)
+                {
+                    hNormalisation_temp->SetBinContent(jbin, nominator_sum/ denominator_sum);                   
+                }
+                startBin=ibin+1;
+
+                denominator_sum = 0;
+                nominator_sum = 0; 
+
+            }
+            else
+            {
+                nominator_sum += hDYPtBfReweighted->GetBinContent(ibin);
+                denominator_sum += hZptWeight_temp->GetBinContent(ibin);
+            }
+        }
+
+        hZptWeight_temp->Multiply(hNormalisation_temp);
+        delete hNormalisation_temp;
+        hZptWeight_temp->Divide(hDYPtBfReweighted);
+
+        for(int ibin = 1; ibin <= hZptWeight_temp->GetXaxis()->GetNbins(); ibin++)  
+        {
+            string temp_cuurent_bin_name(pt_binning_Rec->GetBinName(ibin));
+            string current_mass_bin_name = temp_cuurent_bin_name.substr(temp_cuurent_bin_name.find("mass[")+5, temp_cuurent_bin_name.find("]:pt[")-temp_cuurent_bin_name.find("mass[")-5);
+
+            if(current_mass_bin_name=="ufl" or current_mass_bin_name=="ofl")
+            {
+                hZptWeight_temp->SetBinContent(ibin, 1.); // Will not apply Z pt correction for the underflow/overflow bins 
+            }
+        }
     
-        // Piece-wise fit
-        fitFcn.push_back( new TF1("fitFcn_iter0", piecewise_cubic, 0, 100, 9));
-        hZptWeight_temp_m81to101->Fit(fitFcn.at(0));
-        //cout<<"Eval fn(99.) = " << fitFcn->Eval(99.0) << endl;
-
         outfile.cd();
-        hZptWeight_temp_m81to101->SetName("hZptWeight_iter0");
-        hZptWeight_temp_m81to101->SetTitle("Data(Bkg subtracted)/DY MC iteration 0");
-        hZptWeight_temp_m81to101->Write();
-        delete hZptWeight_temp_m81to101;
+        hZptWeight_temp->SetName("hZptWeight_iter0");
+        hZptWeight_temp->SetTitle("Data(Bkg subtracted)/DY MC iteration 0");
+        hZptWeight_temp->Write();
     }
 
 
@@ -319,12 +367,8 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
                     int bin;
                     //double zpt_weight = fitFcn->Eval(GenZpt); // get Z pt weight from the previous fit
                     double zpt_weight = 1.;
-                    for(TF1* fitFcn_: fitFcn)
-                    {
-                        zpt_weight *= fitFcn_->Eval(GenZpt); 
-                    }
-                    //bin = hZptWeight_temp_m81to101->FindBin(GenZpt);
-                    //zpt_weight = hZptWeight_temp_m81to101->GetBinContent(bin);
+                    bin = pt_binning_Rec->GetGlobalBinNumber(GenZpt, GenZmass);
+                    zpt_weight = hZptWeight_temp->GetBinContent(bin);
                     if(zpt_weight == 0 ) zpt_weight = 1.;
 
                     //if(fabs(zpt_weight_-zpt_weight)/ zpt_weight > 0.2)
@@ -386,7 +430,8 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
 
                 denominator_sum += hDYPtReweighted_temp->GetBinContent(ibin);
                 nominator_sum += hDYPtBfReweighted->GetBinContent(ibin);
-                cout << "current mass bin name: " << current_mass_bin_name << " normalization: " << nominator_sum/ denominator_sum << endl; 
+                
+                cout << "current mass bin name: " << current_mass_bin_name << " norminator: " << nominator_sum << " denominator: " <<  denominator_sum << endl; 
                 
                 endBin = ibin;
                 for(int jbin = startBin; jbin <= endBin; jbin++)
@@ -406,29 +451,84 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
             }
         }
 
+        hZptWeight_temp->Multiply(hNormalisation_temp);   
         hDYPtReweighted_temp->Multiply(hNormalisation_temp);
+
+        outfile.cd();
+        hZptWeight_temp->SetName("hZptWeight_iter" + iter_);
+        hZptWeight_temp->SetTitle("Data(Bkg subtracted)/DY MC iteration " + iter_);
+        hZptWeight_temp->Write();
 
         // Save normalized fit function
         // 1. Use Z pt weight from 81 < mass < 101 region only
 
         // Update reweight histogram
-        hZptWeight_temp_m81to101=pt_binning_Rec->ExtractHistogram("histo_"+dataName + "_temp_m81to101", hDataPt, 0, true, "pt[];mass[UOC2]");
-        hZptWeight_temp_m81to101->Scale(hDYPtBfReweighted_m81to101->Integral()/hZptWeight_temp_m81to101->Integral());
-        TH1* hDYPtReweighted_temp_m81to101=pt_binning_Rec->ExtractHistogram("histo_DYPtReweighted_temp_m81to101", hDYPtReweighted_temp, 0, true, "pt[];mass[UOC2]");  
-        hZptWeight_temp_m81to101->Divide(hDYPtReweighted_temp_m81to101); 
+        TH1* hZptWeight_next_temp=(TH1*) hDataPt->Clone("hZptWeight_temp_iter" + iter_);  ;
+        
 
-        // Piece-wise fit
-        //fitFcn = new TF1("fitFcn", piecewise_cubic, 0, 100, 7);
-        // TODO check fit result before procede 
-        fitFcn.push_back(new TF1("fitFcn_iter" + iter_, piecewise_cubic, 0, 100, 9));
-        hZptWeight_temp_m81to101->Fit(fitFcn.at(iter));
+        TH1* hNormalisation_temp_ = pt_binning_Rec->CreateHistogram("hNormalisation_temp_");
+        hNormalisation_temp_->Sumw2();
+        startBin = 1; 
+        endBin = 1;
+        nominator_sum = 0.;
+        denominator_sum = 0.;
+        for(int ibin = 1; ibin <= hZptWeight_next_temp->GetXaxis()->GetNbins(); ibin++)
+        {
+            int bin_number;
+            // Regular expression, #[^\s]+ \(Rec_Pt:mass\[[^\s]+]:pt\[[^\s]+]\) 
+            string temp_cuurent_bin_name(pt_binning_Rec->GetBinName(ibin));
+            string current_mass_bin_name = temp_cuurent_bin_name.substr(temp_cuurent_bin_name.find("mass[")+5, temp_cuurent_bin_name.find("]:pt[")-temp_cuurent_bin_name.find("mass[")-5);
+            string temp_next_bin_name(pt_binning_Rec->GetBinName(ibin+1));
+            string next_mass_bin_name = temp_next_bin_name.substr(temp_next_bin_name.find("mass[")+5, temp_next_bin_name.find("]:pt[")-temp_next_bin_name.find("mass[")-5);
 
-        outfile.cd();
-        hZptWeight_temp_m81to101->SetName("hZptWeight_iter" + iter_);
-        hZptWeight_temp_m81to101->SetTitle("Data(Bkg subtracted)/DY MC iteration " + iter_);
-        hZptWeight_temp_m81to101->Write();
-        delete hZptWeight_temp_m81to101;
-        //
+            //cout << pt_binning_Rec->GetBinName(ibin) << " mass bin name: " << current_mass_bin_name << endl;
+            //cout << mass_bin << " " << pt_bin << endl;
+            if(next_mass_bin_name.compare(current_mass_bin_name) != 0)
+            {
+
+                denominator_sum += hZptWeight_next_temp->GetBinContent(ibin);
+                nominator_sum += hDYPtBfReweighted->GetBinContent(ibin);
+
+                cout << "current mass bin name: " << current_mass_bin_name << " norminator: " << nominator_sum << " denominator: " <<  denominator_sum << endl; 
+                
+                endBin = ibin;
+                for(int jbin = startBin; jbin <= endBin; jbin++)
+                {
+                    if(current_mass_bin_name=="ufl" or current_mass_bin_name=="ofl")
+                        hNormalisation_temp_->SetBinContent(jbin, 1.);                   
+                    else
+                        hNormalisation_temp_->SetBinContent(jbin, nominator_sum/ denominator_sum);                   
+                }
+                startBin=ibin+1;
+
+                denominator_sum = 0;
+                nominator_sum = 0; 
+
+            }
+            else
+            {
+                nominator_sum += hDYPtBfReweighted->GetBinContent(ibin);
+                denominator_sum += hZptWeight_next_temp->GetBinContent(ibin);
+            }
+        }
+
+        hZptWeight_next_temp->Multiply(hNormalisation_temp_);
+        delete hNormalisation_temp_;
+        hZptWeight_next_temp->Divide(hDYPtReweighted_temp); 
+
+        hZptWeight_temp->Multiply(hZptWeight_next_temp);
+        delete hZptWeight_next_temp;
+
+        for(int ibin = 1; ibin <= hZptWeight_temp->GetXaxis()->GetNbins(); ibin++)  
+        {
+            string temp_cuurent_bin_name(pt_binning_Rec->GetBinName(ibin));
+            string current_mass_bin_name = temp_cuurent_bin_name.substr(temp_cuurent_bin_name.find("mass[")+5, temp_cuurent_bin_name.find("]:pt[")-temp_cuurent_bin_name.find("mass[")-5);
+
+            if(current_mass_bin_name=="ufl" or current_mass_bin_name=="ofl")
+            {
+                hZptWeight_temp->SetBinContent(ibin, 1.); // Will not apply Z pt correction for the underflow/overflow bins 
+            }
+        }
 
 
         cout << iter << " th iteration finished " << endl;
@@ -443,22 +543,12 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         }
         hDYPtReweighted_temp->Write();
         hNormalisation_temp->Write();
-/*
-        hZptWeightInputForNextIter->Write();
-        hDYPt_comparison->Write();
-
-        std::cout << "initial N: " << hDYPtBfReweighted->Integral() << " final N: " << hDYPtReweighted_temp->Integral() << std::endl;
-        delete hDataPt_temp;
-        delete hBkgPt_temp;
-        delete hDYPt_comparison;
-        delete hZptWeightInputForNextIter;
-*/
         delete hZptWeight;
         delete hDYPtReweighted_temp;
 
         //delete tsignal;
     }
-    while(iter != 1); // TODO add condition to exit
+    while(iter != 20); // TODO add condition to exit
     delete chain;
 
     outfile.cd();
