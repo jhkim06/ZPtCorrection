@@ -78,14 +78,141 @@ TH1* fit_ZptWeightHist(TString file1, TH1* hZptWeight)
     }
  
     outfile.cd();
-    hout->SetName("ZptWeight_for_next_iter2");
+    hout->SetName("ZptWeight_for_next_iter0");
     hout->Write();
 
     //hZptWeight->SetName("hZptWeight_iter1");
     hZptWeight->Write();
 
     return hout;
-    
+}
+
+void draw_plots()
+{
+
+    //TString fin_string = "./ZptWeight_electron_current_result.root";
+    TString fin_string = "/home/jhkim/ISR_Run2/unfolding/TUnfoldISR2016/output/2016/electron_detector_dressedDRp1_extended/DetUNFOLD_electron_2016.root";
+    TFile fin(fin_string);
+    TString h1_name = "unfolded/Mass/histo_Data_UnfoldModel";
+    TString h2_name = "unfolded/Mass/histo_Data";
+    TString h3_name = "unfolded/Mass/histo_DY";
+
+    TH1 * h1 = (TH1*) fin.Get(h1_name);
+    TH1 * h2 = (TH1*) fin.Get(h2_name);
+    TH1 * h3 = (TH1*) fin.Get(h3_name);
+
+    TFile fhist("hists/unfold_input.root");
+    TUnfoldBinning* pt_binning_Rec = NULL; 
+    TString PtRec_binName = "Detector/Mass_FineCoarse/Gen_Mass";
+    pt_binning_Rec = (TUnfoldBinning*)fhist.Get(PtRec_binName);
+
+    TCanvas *c1 = new TCanvas("c1","Canvas Example",200,10,800,480);
+    //h1 = (TH1*) pt_binning_Rec->ExtractHistogram("histo1", h1, 0, false, "pt[O];mass[UO]");
+    //h2 = (TH1*) pt_binning_Rec->ExtractHistogram("histo2", h2, 0, false, "pt[O];mass[UO]");
+    //h3 = (TH1*) pt_binning_Rec->ExtractHistogram("histo3", h3, 0, false, "pt[O];mass[UO]");
+
+    h1 = (TH1*) pt_binning_Rec->ExtractHistogram("histo1", h1, 0, false, "mass[UO];pt[O]");
+    h2 = (TH1*) pt_binning_Rec->ExtractHistogram("histo2", h2, 0, false, "mass[UO];pt[O]");
+    h3 = (TH1*) pt_binning_Rec->ExtractHistogram("histo3", h3, 0, false, "mass[UO];pt[O]");
+
+    h1->SetMinimum(0.9); 
+    h1->SetMaximum(1.1); 
+    h1->SetMarkerStyle(20);
+    h1->SetLineColor(kBlack);
+    h1->SetStats(false);
+    h1->SetTitle("");
+    //h1->GetXaxis()->SetTitle("p_{T} bin index");
+    h1->GetXaxis()->SetTitle("Mass bin index");
+    //h1->GetYaxis()->SetTitle("Z p_{T} weights");
+    h1->GetYaxis()->SetTitle("ratio");
+    h1->Divide(h2);
+    h1->Draw();
+
+    h3->Divide(h2);
+
+    //h2->SetLineColor(kRed);
+    //h2->Draw("hist same");
+    //
+    h3->SetLineColor(kRed);
+    //h3->Draw("hist same");
+
+    double npt_bin = 9;
+    TLine *l1 = new TLine(npt_bin+0.5,  0.9, npt_bin+0.5,  1.1);
+    TLine *l2 = new TLine(npt_bin*2+0.5,0.9,npt_bin*2+0.5,1.1);
+    TLine *l3 = new TLine(npt_bin*3+0.5,0.9,npt_bin*3+0.5,1.1);
+    TLine *l4 = new TLine(npt_bin*4+0.5,0.9,npt_bin*4+0.5,1.1);
+    TLine *l5 = new TLine(npt_bin*5+0.5,0.9,npt_bin*5+0.5,1.1);
+    //l1->Draw();
+    //l2->Draw();
+    //l3->Draw();
+    //l4->Draw();
+    //l5->Draw();
+    l1->SetLineColor(kBlue);
+    l2->SetLineColor(kBlue);
+    l3->SetLineColor(kBlue);
+    l4->SetLineColor(kBlue);
+    l5->SetLineColor(kBlue);
+
+    c1->SaveAs("test.pdf");
+}
+
+void draw_plots_mass()
+{
+
+    TString fin_string = "./ZptWeight_electron_current_result.root";
+    TFile fin(fin_string);
+    TH1 * h1 = (TH1*) fin.Get("hDYMassReweighted_iter1");
+    TH1 * h2 = (TH1*) fin.Get("histo_DoubleEG_Mass");
+    TH1 * h3 = (TH1*) fin.Get("histo_DYJets_Mass");
+
+    TFile fhist("hists/unfold_input.root");
+    TUnfoldBinning* pt_binning_Rec = NULL; 
+    TString MassRec_binName = "Detector/Mass_FineCoarse/Rec_Mass";
+    pt_binning_Rec = (TUnfoldBinning*)fhist.Get(MassRec_binName);
+
+    TCanvas *c1 = new TCanvas("c1","Canvas Example",200,10,800,480);
+    h1 = (TH1*) pt_binning_Rec->ExtractHistogram("histo1", h1, 0, false, "mass[UO];pt[O]");
+    h2 = (TH1*) pt_binning_Rec->ExtractHistogram("histo2", h2, 0, false, "mass[UO];pt[O]");
+    h3 = (TH1*) pt_binning_Rec->ExtractHistogram("histo3", h3, 0, false, "mass[UO];pt[O]");
+
+    h1->SetMinimum(0.); 
+    h1->SetMaximum(2.); 
+    h1->SetMarkerStyle(20);
+    h1->SetLineColor(kBlack);
+    h1->SetStats(false);
+    h1->SetTitle("");
+    h1->GetXaxis()->SetTitle("Mass bin index");
+    //h1->GetYaxis()->SetTitle("Z p_{T} weights");
+    h1->GetYaxis()->SetTitle("ratio");
+    h1->Divide(h2);
+    h1->Draw();
+
+    h3->Divide(h2);
+
+    //h2->SetLineColor(kRed);
+    //h2->Draw("hist same");
+    //
+    h3->SetLineColor(kRed);
+    h3->Draw("hist same");
+
+    double npt_bin = 18;
+    TLine *l1 = new TLine(18+0.5,0., 18+0.5,2.);
+    TLine *l2 = new TLine(18*2+0.5,0,18*2+0.5,2.);
+    TLine *l3 = new TLine(18*3+0.5,0,18*3+0.5,2.);
+    TLine *l4 = new TLine(18*4+0.5,0,18*4+0.5,2.);
+    TLine *l5 = new TLine(18*5+0.5,0,18*5+0.5,2.);
+    //l1->Draw();
+    //l2->Draw();
+    //l3->Draw();
+    //l4->Draw();
+    //l5->Draw();
+    l1->SetLineColor(kBlue);
+    l2->SetLineColor(kBlue);
+    l3->SetLineColor(kBlue);
+    l4->SetLineColor(kBlue);
+    l5->SetLineColor(kBlue);
+
+    c1->SaveAs("test.pdf");
 }
 
 
