@@ -11,7 +11,7 @@
 #include <string>
 #include <regex>
 
-void makeZptRewightedMatrix(TString inFile_Zpt, TString inFile_binDef, TString outFile="ZptWeight_matrix.root") 
+void makeZptRewightedMatrix(TString inFile_Zpt, TString inFile_binDef, TString outFile="ZptWeight_matrix.root", bool isDetUnfold=true)
 {
     gROOT->SetBatch();
     TH1::AddDirectory(kFALSE);
@@ -26,6 +26,11 @@ void makeZptRewightedMatrix(TString inFile_Zpt, TString inFile_binDef, TString o
     TString ptGen_binName = "Detector/Pt_FineCoarse/Gen_Pt";
     TString massRec_binName = "Detector/Mass_FineCoarse/Rec_Mass";
     TString massGen_binName = "Detector/Mass_FineCoarse/Gen_Mass";
+    if(!isDetUnfold)
+    {
+    ptRec_binName = "Detector/Pt_FineCoarse/Gen_Pt";
+    massRec_binName = "Detector/Mass_FineCoarse/Gen_Mass";
+    }
 
     TUnfoldBinning* pt_binning_Rec = (TUnfoldBinning*)fhist_binDef.Get(ptRec_binName);
     TUnfoldBinning* pt_binning_Gen = (TUnfoldBinning*)fhist_binDef.Get(ptGen_binName);
@@ -38,7 +43,7 @@ void makeZptRewightedMatrix(TString inFile_Zpt, TString inFile_binDef, TString o
     hmatrix_pt->Sumw2();
     hmatrix_mass->Sumw2();
 
-    TFile outfile(outFile,"UPDATE"); 
+    TFile outfile(outFile,"UPDATE");
 
     // DY MC tree
     // Reconstruction level variables
@@ -64,9 +69,13 @@ void makeZptRewightedMatrix(TString inFile_Zpt, TString inFile_binDef, TString o
     bool evt_tag_dielectron_promptfinal;
     bool evt_tag_pass_kinematic_cut_el_FSRgammaDRp1_gen;
     bool evt_tag_pass_kinematic_cut_mu_FSRgammaDRp1_gen;
+    bool evt_tag_pass_kinematic_cut_el_FSRgamma_gen;
+    bool evt_tag_pass_kinematic_cut_mu_FSRgamma_gen;
 
     Double_t dilep_pt_FSRgammaDRp1_gen_ispromptfinal;
     Double_t dilep_mass_FSRgammaDRp1_gen_ispromptfinal;
+    Double_t dilep_pt_FSRgamma_gen_ispromptfinal;
+    Double_t dilep_mass_FSRgamma_gen_ispromptfinal;
     Double_t evt_weight_total_gen;
 
     Long64_t nentries;
@@ -107,6 +116,8 @@ void makeZptRewightedMatrix(TString inFile_Zpt, TString inFile_binDef, TString o
 
     tsignal->SetBranchAddress("pass_kinematic_cut_el_FSRgammaDRp1_gen",&evt_tag_pass_kinematic_cut_el_FSRgammaDRp1_gen);
     tsignal->SetBranchAddress("pass_kinematic_cut_mu_FSRgammaDRp1_gen",&evt_tag_pass_kinematic_cut_mu_FSRgammaDRp1_gen);
+    tsignal->SetBranchAddress("pass_kinematic_cut_el_FSRgamma_gen",&evt_tag_pass_kinematic_cut_el_FSRgamma_gen);
+    tsignal->SetBranchAddress("pass_kinematic_cut_mu_FSRgamma_gen",&evt_tag_pass_kinematic_cut_mu_FSRgamma_gen);
     tsignal->SetBranchAddress("evt_tag_ditau_hardprocess",&evt_tag_ditau_hardprocess);
     tsignal->SetBranchAddress("evt_tag_dielectron_hardprocess",&evt_tag_dielectron_hardprocess);
     tsignal->SetBranchAddress("evt_tag_dimuon_hardprocess",&evt_tag_dimuon_hardprocess);
@@ -114,6 +125,8 @@ void makeZptRewightedMatrix(TString inFile_Zpt, TString inFile_binDef, TString o
     tsignal->SetBranchAddress("evt_tag_dielectron_promptfinal",&evt_tag_dielectron_promptfinal);
     tsignal->SetBranchAddress("dilep_pt_FSRgammaDRp1_gen_ispromptfinal",&dilep_pt_FSRgammaDRp1_gen_ispromptfinal);
     tsignal->SetBranchAddress("dilep_mass_FSRgammaDRp1_gen_ispromptfinal",&dilep_mass_FSRgammaDRp1_gen_ispromptfinal);
+    tsignal->SetBranchAddress("dilep_pt_FSRgamma_gen_ispromptfinal",&dilep_pt_FSRgamma_gen_ispromptfinal);
+    tsignal->SetBranchAddress("dilep_mass_FSRgamma_gen_ispromptfinal",&dilep_mass_FSRgamma_gen_ispromptfinal);
     tsignal->SetBranchAddress("evt_weight_total_gen",&evt_weight_total_gen);
 
     nentries=tsignal->GetEntries();
@@ -125,48 +138,71 @@ void makeZptRewightedMatrix(TString inFile_Zpt, TString inFile_binDef, TString o
         tsignal->GetEntry(i);
         if(i%10000000==0) cout<<i<< " /" << nentries << " (" << (double)(100.*i/nentries) << "%)" << endl;
 
-        Double_t genZpt = 0., genZmass = 0.;
+        Double_t truthZpt = 0., truthZmass = 0.;
+        Double_t measuredZpt = 0., measuredZmass = 0.;
         if(isElectron && !evt_tag_dielectron_promptfinal) continue;
         if(!isElectron && !evt_tag_dimuon_promptfinal) continue;
         // No tautau event saved in the input tree
 
-        genZpt   = dilep_pt_FSRgammaDRp1_gen_ispromptfinal;
-        genZmass = dilep_mass_FSRgammaDRp1_gen_ispromptfinal;
+        measuredZmass = dilep_mass_rec;
+        measuredZpt = dilep_pt_rec;
 
-        if(genZpt < 0 || genZmass < 0 ) continue;
+        truthZpt   = dilep_pt_FSRgammaDRp1_gen_ispromptfinal;
+        truthZmass = dilep_mass_FSRgammaDRp1_gen_ispromptfinal;
 
+        if(!isDetUnfold)
+        {
+            measuredZmass = dilep_mass_FSRgammaDRp1_gen_ispromptfinal;
+            measuredZpt = dilep_pt_FSRgammaDRp1_gen_ispromptfinal;
+
+            truthZmass = dilep_mass_FSRgamma_gen_ispromptfinal;
+            truthZpt   = dilep_pt_FSRgamma_gen_ispromptfinal;
+        }
+
+        if(truthZpt < 0 || truthZmass < 0 ) continue;
         bool event_selection = evt_tag_analysisevnt_sel_rec && evt_tag_dielectron_rec && evt_tag_pass_kinematic_cut_el_FSRgammaDRp1_gen;
         Double_t genWeight = evt_weight_total_gen;
         Double_t recWeight = evt_weight_total_rec*evt_weight_recoSF_rec*evt_weight_idSF_rec*evt_weight_trigSF_rec*evt_weight_trigSFDZ_rec;
+        Double_t totWeight = genWeight * recWeight; 
+
+        if(!isDetUnfold)
+        {
+            event_selection = evt_tag_pass_kinematic_cut_el_FSRgammaDRp1_gen && evt_tag_pass_kinematic_cut_el_FSRgamma_gen;
+            totWeight = genWeight;
+        }
+
         if(!isElectron)
         {
             event_selection = evt_tag_analysisevnt_sel_rec && evt_tag_dimuon_rec && evt_tag_pass_kinematic_cut_mu_FSRgammaDRp1_gen;
-            recWeight = evt_weight_total_rec*evt_weight_isoSF_rec*evt_weight_idSF_rec*evt_weight_trigSF_rec;
+            totWeight = evt_weight_total_gen*evt_weight_total_rec*evt_weight_isoSF_rec*evt_weight_idSF_rec*evt_weight_trigSF_rec;
         }
-        Double_t totWeight = genWeight * recWeight; 
+
 
         if(event_selection)
         {
             double low_mass = 15.;
             double high_mass = 3000.;
-            if(dilep_mass_rec > low_mass && dilep_mass_rec < high_mass && dilep_pt_rec < 3000. &&
-                genZmass > low_mass && genZmass < high_mass && genZpt < 3000.) // TODO add generator requirement
+            if(measuredZmass > low_mass && measuredZmass < high_mass && measuredZpt < 3000. &&
+                truthZmass > low_mass && truthZmass < high_mass && truthZpt < 3000.) // TODO add generator requirement
             {
                 //
-                int recBin_pt_index = pt_binning_Rec->GetGlobalBinNumber(dilep_pt_rec, dilep_mass_rec);
-                int genBin_pt_index = pt_binning_Gen->GetGlobalBinNumber(genZpt, genZmass);
-                int recBin_mass_index = mass_binning_Rec->GetGlobalBinNumber(dilep_mass_rec, dilep_pt_rec);
-                int genBin_mass_index = mass_binning_Gen->GetGlobalBinNumber(genZmass, genZpt);
+                int recBin_pt_index = pt_binning_Rec->GetGlobalBinNumber(measuredZpt, measuredZmass);
+                int genBin_pt_index = pt_binning_Gen->GetGlobalBinNumber(truthZpt, truthZmass);
+                int recBin_mass_index = mass_binning_Rec->GetGlobalBinNumber(measuredZmass, measuredZpt);
+                int genBin_mass_index = mass_binning_Gen->GetGlobalBinNumber(truthZmass, truthZpt);
 
-                int recBin_index_for_zpt_weight = pt_binning_Rec->GetGlobalBinNumber(genZpt, genZmass);
+                int recBin_index_for_zpt_weight = pt_binning_Rec->GetGlobalBinNumber(truthZpt, truthZmass);
                 double zpt_weight = hZptWeight->GetBinContent(recBin_index_for_zpt_weight);
 
                 hmatrix_pt->Fill(genBin_pt_index, recBin_pt_index, totWeight * zpt_weight);
                 hmatrix_mass->Fill(genBin_mass_index, recBin_mass_index, totWeight * zpt_weight);
 
                 // bin zero
-                hmatrix_pt->Fill(genBin_pt_index, 0., zpt_weight * evt_weight_total_gen * (1.- recWeight)); 
-                hmatrix_mass->Fill(genBin_mass_index, 0., zpt_weight * evt_weight_total_gen * (1.- recWeight)); 
+                if(isDetUnfold)
+                {
+                hmatrix_pt->Fill(genBin_pt_index, 0., zpt_weight * evt_weight_total_gen * (1.- recWeight));
+                hmatrix_mass->Fill(genBin_mass_index, 0., zpt_weight * evt_weight_total_gen * (1.- recWeight));
+                }
             }
         }
     }

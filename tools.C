@@ -39,14 +39,16 @@ TF1* fit_cheb(int n, double min, double max, TH1* h)
     return f1;
 }
 
-TH1* fit_ZptWeightHist(TString file1, TH1* hZptWeight)
+TH1* fit_ZptWeightHist(TH1* hZptWeight, bool isDetUnfold=true)
 {
 
-    TFile outfile("ZptWeight_electron.root","UPDATE"); 
+    TFile outfile("ZptWeight_final.root","UPDATE"); 
     // extract histogram in each mass bin
-    TFile fhist("hists/unfold_input.root");
+    TFile fhist("hists/unfold_input.root"); // to get binning definition
     TUnfoldBinning* pt_binning_Rec = NULL; 
     TString PtRec_binName = "Detector/Pt_FineCoarse/Rec_Pt";
+    if(!isDetUnfold)
+        PtRec_binName = "Detector/Pt_FineCoarse/Gen_Pt";
     pt_binning_Rec = (TUnfoldBinning*)fhist.Get(PtRec_binName);
 
     double mass[6] = {51., 65., 82., 102., 201., 321.};
@@ -83,6 +85,7 @@ TH1* fit_ZptWeightHist(TString file1, TH1* hZptWeight)
 
     //hZptWeight->SetName("hZptWeight_iter1");
     hZptWeight->Write();
+    outfile.Write();
 
     return hout;
 }

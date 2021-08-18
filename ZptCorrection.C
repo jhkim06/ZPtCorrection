@@ -72,7 +72,7 @@ double piecewise_cubic(double *x, double *par)
 }
 
 
-void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = "hists/ISR_detector_plots_electron_new.root")
+void GetZptReweight(bool isElectron = true, bool isDetUnfold = true, TString histFile = "hists/ISR_detector_plots_electron_new.root", bool onlyNormalisation = false)
 {
     gROOT->SetBatch();
     TH1::AddDirectory(kFALSE);
@@ -87,24 +87,41 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
 
     TFile fhist(histFile);
     TString output_postfix = "electron";
-    TString massBinStr = "";
-    TUnfoldBinning* pt_binning_Rec = NULL;
-    TUnfoldBinning* mass_binning_Rec = NULL;
+    TUnfoldBinning* pt_binning = NULL;
+    TUnfoldBinning* mass_binning = NULL;
 
-    TFile fhist2("hists/DY.root");
+    TFile* fhist2 = NULL; 
+    if(isDetUnfold) 
+    {
+        fhist2 = new TFile("hists/DY.root", "Read");
+    }
+    else
+    {
+        fhist2 = new TFile("/home/jhkim/ISR_Run2/unfolding/TUnfoldISR2016/inFiles/2016/electron_detector_dressedDRp1_extended/efficiency/acceptance_dRp1.root", "Read");
+    }
 
     // Get
-    TString PtRec_binName = "Detector/Pt_FineCoarse/Rec_Pt";
-    TString MassRec_binName = "Detector/Mass_FineCoarse/Rec_Mass";
-    pt_binning_Rec = (TUnfoldBinning*)fhist.Get(PtRec_binName);
-    mass_binning_Rec = (TUnfoldBinning*)fhist.Get(MassRec_binName);
+    TString Pt_binName;
+    TString Mass_binName;
+    if(isDetUnfold)
+    {
+        Pt_binName = "Detector/Pt_FineCoarse/Rec_Pt";
+        Mass_binName = "Detector/Mass_FineCoarse/Rec_Mass";
+    }
+    else
+    {
+        Pt_binName = "acceptance/Pt/Gen_Pt";
+        Mass_binName = "acceptance/Mass/Gen_Mass";
+    }
+    pt_binning = (TUnfoldBinning*)fhist.Get(Pt_binName);
+    mass_binning = (TUnfoldBinning*)fhist.Get(Mass_binName);
 
     // Output file
     if(!isElectron)
     {
         output_postfix = "muon";
     }
-    TFile outfile("ZptWeight_"+output_postfix+massBinStr+".root","UPDATE");
+    TFile outfile("ZptWeight_"+output_postfix+".root","UPDATE");
 
     int stop = 0;
     int iter = 0;
@@ -155,7 +172,15 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         hZptWeight_for_next_iteration = (TH1*)outfile.Get("ZptWeight_for_next_iter" + next_iter_);
     }
 
-    TString dir = "Detector"+massBinStr;
+    if(onlyNormalisation)
+    {
+        // Z pt weight input after fit result
+        TFile zpt_external("ZptWeight_final.root","READ");
+        hZptWeight_for_next_iteration = (TH1*) zpt_external.Get("ZptWeight_for_next_iter0");
+        zpt_external.Close();
+    }
+
+    TString dir = "Detector"; // Dressed_DRp1
     TString histDir = "/Pt_FineCoarse/";
     TString dataName = "DoubleEG";
     TString channelName = "EE";
@@ -164,42 +189,75 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         dataName = "DoubleMuon";
         channelName = "MuMu";
     }
+    if(!isDetUnfold)
+    {
+        dir = "acceptance";
+        histDir = "Pt";
+    }
 
     // Get Data and Background histograms
-    hDataPt=(TH1*)fhist.Get(dir+histDir+"histo_"+dataName);
-    hBkgPt =(TH1*)fhist.Get(dir+histDir+"histo_ZZ_pythia");
-    hBkgPt->Add((TH1*)fhist.Get(dir+histDir+"histo_WZ_pythia"));
-    hBkgPt->Add((TH1*)fhist.Get(dir+histDir+"histo_WW_pythia"));
-    hBkgPt->Add((TH1*)fhist.Get(dir+histDir+"histo_TTLL_powheg"));
-    hBkgPt->Add((TH1*)fhist.Get(dir+histDir+"histo_DYJets10to50ToTauTau"));
-    hBkgPt->Add((TH1*)fhist.Get(dir+histDir+"histo_DYJetsToTauTau"));
-    hBkgPt->Add((TH1*)fhist2.Get("Detector_DY_Fake/Pt_FineCoarse/histo_DYJets"));
-    hBkgPt->Add((TH1*)fhist2.Get("Detector_DY_Fake/Pt_FineCoarse/histo_DYJets10to50"));
+
+    if(isDetUnfold)
+    {
+        hDataPt=(TH1*)fhist.Get(dir+histDir+"histo_"+dataName);
+
+        hBkgPt =(TH1*)fhist.Get(dir+histDir+"histo_ZZ_pythia");
+        hBkgPt->Add((TH1*)fhist.Get(dir+histDir+"histo_WZ_pythia"));
+        hBkgPt->Add((TH1*)fhist.Get(dir+histDir+"histo_WW_pythia"));
+        hBkgPt->Add((TH1*)fhist.Get(dir+histDir+"histo_TTLL_powheg"));
+        hBkgPt->Add((TH1*)fhist.Get(dir+histDir+"histo_DYJets10to50ToTauTau"));
+        hBkgPt->Add((TH1*)fhist.Get(dir+histDir+"histo_DYJetsToTauTau"));
+        hBkgPt->Add((TH1*)fhist2->Get("Detector_DY_Fake/Pt_FineCoarse/histo_DYJets"));
+        hBkgPt->Add((TH1*)fhist2->Get("Detector_DY_Fake/Pt_FineCoarse/histo_DYJets10to50"));
+
+        hDYPtBfReweighted=(TH1*)fhist2->Get("Detector_Dressed_DRp1_Fiducial/Pt_FineCoarse/histo_DYJets");
+        hDYPtBfReweighted->Add((TH1*)fhist2->Get("Detector_Dressed_DRp1_Fiducial/Pt_FineCoarse/histo_DYJets10to50"));
+    }
+    else
+    {
+        hDataPt=(TH1*)fhist.Get("acceptance/Pt/histo_Data");
+
+        hBkgPt =(TH1*)fhist2->Get("Dressed_DRp1_DY_Fake/Pt_FineCoarse/histo_DYJets");
+        hBkgPt->Add((TH1*)fhist2->Get("Dressed_DRp1_DY_Fake/Pt_FineCoarse/histo_DYJets10to50"));
+
+        hDYPtBfReweighted=(TH1*)fhist2->Get("Acceptance/Pt_FineCoarse/histo_DYJets");
+        hDYPtBfReweighted->Add((TH1*)fhist2->Get("Acceptance/Pt_FineCoarse/histo_DYJets10to50"));
+    }
 
     hDataPt->Add(hBkgPt, -1);
 
-    hDYPtBfReweighted=(TH1*)fhist2.Get("Detector_Dressed_DRp1_Fiducial/Pt_FineCoarse/histo_DYJets");
-    hDYPtBfReweighted->Add((TH1*)fhist2.Get("Detector_Dressed_DRp1_Fiducial/Pt_FineCoarse/histo_DYJets10to50"));
-
     // Mass
     histDir = "/Mass_FineCoarse/";
-    hDataMass=(TH1*)fhist.Get(dir+histDir+"histo_"+dataName);
-    hBkgMass =(TH1*)fhist.Get(dir+histDir+"histo_ZZ_pythia");
-    hBkgMass->Add((TH1*)fhist.Get(dir+histDir+"histo_WZ_pythia"));
-    hBkgMass->Add((TH1*)fhist.Get(dir+histDir+"histo_WW_pythia"));
-    hBkgMass->Add((TH1*)fhist.Get(dir+histDir+"histo_TTLL_powheg"));
-    hBkgMass->Add((TH1*)fhist.Get(dir+histDir+"histo_DYJets10to50ToTauTau"));
-    hBkgMass->Add((TH1*)fhist.Get(dir+histDir+"histo_DYJetsToTauTau"));
-    hBkgMass->Add((TH1*)fhist2.Get("Detector_DY_Fake/Mass_FineCoarse/histo_DYJets"));
-    hBkgMass->Add((TH1*)fhist2.Get("Detector_DY_Fake/Mass_FineCoarse/histo_DYJets10to50"));
 
+    if(isDetUnfold)
+    {
+        hDataMass=(TH1*)fhist.Get(dir+histDir+"histo_"+dataName);
+
+        hBkgMass =(TH1*)fhist.Get(dir+histDir+"histo_ZZ_pythia");
+        hBkgMass->Add((TH1*)fhist.Get(dir+histDir+"histo_WZ_pythia"));
+        hBkgMass->Add((TH1*)fhist.Get(dir+histDir+"histo_WW_pythia"));
+        hBkgMass->Add((TH1*)fhist.Get(dir+histDir+"histo_TTLL_powheg"));
+        hBkgMass->Add((TH1*)fhist.Get(dir+histDir+"histo_DYJets10to50ToTauTau"));
+        hBkgMass->Add((TH1*)fhist.Get(dir+histDir+"histo_DYJetsToTauTau"));
+
+        hBkgMass->Add((TH1*)fhist2->Get("Detector_DY_Fake/Mass_FineCoarse/histo_DYJets"));
+        hBkgMass->Add((TH1*)fhist2->Get("Detector_DY_Fake/Mass_FineCoarse/histo_DYJets10to50"));
+
+        hDYMassBfReweighted=(TH1*)fhist2->Get("Detector_Dressed_DRp1_Fiducial/Mass_FineCoarse/histo_DYJets");
+        hDYMassBfReweighted->Add((TH1*)fhist2->Get("Detector_Dressed_DRp1_Fiducial/Mass_FineCoarse/histo_DYJets10to50"));
+    }
+    else
+    {
+        hDataMass=(TH1*)fhist.Get("acceptance/Mass/histo_Data");
+
+        hBkgMass =(TH1*)fhist2->Get("Dressed_DRp1_DY_Fake/Mass_FineCoarse/histo_DYJets");
+        hBkgMass->Add((TH1*)fhist2->Get("Dressed_DRp1_DY_Fake/Mass_FineCoarse/histo_DYJets10to50"));
+
+        hDYMassBfReweighted=(TH1*)fhist2->Get("Acceptance/Mass_FineCoarse/histo_DYJets");
+        hDYMassBfReweighted->Add((TH1*)fhist2->Get("Acceptance/Mass_FineCoarse/histo_DYJets10to50"));
+    }
     hDataMass->Add(hBkgMass, -1);
 
-    hDYMassBfReweighted=(TH1*)fhist2.Get("Detector_Dressed_DRp1_Fiducial/Mass_FineCoarse/histo_DYJets");
-    hDYMassBfReweighted->Add((TH1*)fhist2.Get("Detector_Dressed_DRp1_Fiducial/Mass_FineCoarse/histo_DYJets10to50"));
-
-    TFile zpt_external("ZptWeight_final.root","READ");
-    hZptWeight_for_next_iteration = (TH1*) zpt_external.Get("ZptWeight_for_next_iter0");
 
     //
     if(hZptWeight_for_next_iteration == NULL)
@@ -212,19 +270,25 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         int endBin = 1;  
         double nominator_sum = 0.;
         double denominator_sum = 0.; 
-        TH1* hNormalisation_temp = pt_binning_Rec->CreateHistogram("hNormalisation_temp");
+        TH1* hNormalisation_temp = pt_binning->CreateHistogram("hNormalisation_temp");
         hNormalisation_temp->Sumw2();
         for(int ibin = 1; ibin <= hZptWeight_for_next_iteration->GetXaxis()->GetNbins(); ibin++)
         {
             // Regular expression, #[^\s]+ \(Rec_Pt:mass\[[^\s]+]:pt\[[^\s]+]\) 
-            string temp_cuurent_bin_name(pt_binning_Rec->GetBinName(ibin));
+            string temp_cuurent_bin_name(pt_binning->GetBinName(ibin));
             string current_mass_bin_name = temp_cuurent_bin_name.substr(temp_cuurent_bin_name.find("mass[")+5, temp_cuurent_bin_name.find("]:pt[")-temp_cuurent_bin_name.find("mass[")-5);
-            string temp_next_bin_name(pt_binning_Rec->GetBinName(ibin+1));
-            string next_mass_bin_name = temp_next_bin_name.substr(temp_next_bin_name.find("mass[")+5, temp_next_bin_name.find("]:pt[")-temp_next_bin_name.find("mass[")-5);
+       
+            string temp_next_bin_name;
+            string next_mass_bin_name; 
+            if(ibin < hZptWeight_for_next_iteration->GetXaxis()->GetNbins())
+            {
+                temp_next_bin_name = (pt_binning->GetBinName(ibin+1));
+                next_mass_bin_name = temp_next_bin_name.substr(temp_next_bin_name.find("mass[")+5, temp_next_bin_name.find("]:pt[")-temp_next_bin_name.find("mass[")-5);
+            }
 
-            //cout << pt_binning_Rec->GetBinName(ibin) << " mass bin name: " << current_mass_bin_name << endl;
+            //cout << pt_binning->GetBinName(ibin) << " mass bin name: " << current_mass_bin_name << endl;
             //cout << mass_bin << " " << pt_bin << endl;
-            if(next_mass_bin_name.compare(current_mass_bin_name) != 0)
+            if(ibin == hZptWeight_for_next_iteration->GetXaxis()->GetNbins() || next_mass_bin_name.compare(current_mass_bin_name) != 0)
             {
 
                 denominator_sum += hZptWeight_for_next_iteration->GetBinContent(ibin);
@@ -256,7 +320,7 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
 
         for(int ibin = 1; ibin <= hZptWeight_for_next_iteration->GetXaxis()->GetNbins(); ibin++)  
         {
-            string temp_cuurent_bin_name(pt_binning_Rec->GetBinName(ibin));
+            string temp_cuurent_bin_name(pt_binning->GetBinName(ibin));
             string current_mass_bin_name = temp_cuurent_bin_name.substr(temp_cuurent_bin_name.find("mass[")+5, temp_cuurent_bin_name.find("]:pt[")-temp_cuurent_bin_name.find("mass[")-5);
             string current_pt_bin_name = temp_cuurent_bin_name.substr(temp_cuurent_bin_name.find(":pt[")+4, temp_cuurent_bin_name.find("])")-temp_cuurent_bin_name.find(":pt[")-4);
             cout << "current_mass_bin_name: " << current_mass_bin_name << " current_pt_bin_name: " << current_pt_bin_name << endl;
@@ -294,13 +358,20 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
     bool evt_tag_ditau_hardprocess;
     bool evt_tag_dielectron_hardprocess;
     bool evt_tag_dimuon_hardprocess;
+
     bool evt_tag_dimuon_promptfinal;
     bool evt_tag_dielectron_promptfinal;
+
     bool evt_tag_pass_kinematic_cut_el_FSRgammaDRp1_gen;
     bool evt_tag_pass_kinematic_cut_mu_FSRgammaDRp1_gen;
+    bool evt_tag_pass_kinematic_cut_el_FSRgamma_gen;
+    bool evt_tag_pass_kinematic_cut_mu_FSRgamma_gen;
 
     Double_t dilep_pt_FSRgammaDRp1_gen_ispromptfinal;
     Double_t dilep_mass_FSRgammaDRp1_gen_ispromptfinal;
+    Double_t dilep_pt_FSRgamma_gen_ispromptfinal;
+    Double_t dilep_mass_FSRgamma_gen_ispromptfinal;
+
     Double_t evt_weight_total_gen;
 
     Long64_t nentries;
@@ -340,6 +411,8 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
 
     tsignal->SetBranchAddress("pass_kinematic_cut_el_FSRgammaDRp1_gen",&evt_tag_pass_kinematic_cut_el_FSRgammaDRp1_gen);
     tsignal->SetBranchAddress("pass_kinematic_cut_mu_FSRgammaDRp1_gen",&evt_tag_pass_kinematic_cut_mu_FSRgammaDRp1_gen);
+    tsignal->SetBranchAddress("pass_kinematic_cut_el_FSRgamma_gen",&evt_tag_pass_kinematic_cut_el_FSRgamma_gen);
+    tsignal->SetBranchAddress("pass_kinematic_cut_mu_FSRgamma_gen",&evt_tag_pass_kinematic_cut_mu_FSRgamma_gen);
     tsignal->SetBranchAddress("evt_tag_ditau_hardprocess",&evt_tag_ditau_hardprocess);
     tsignal->SetBranchAddress("evt_tag_dielectron_hardprocess",&evt_tag_dielectron_hardprocess);
     tsignal->SetBranchAddress("evt_tag_dimuon_hardprocess",&evt_tag_dimuon_hardprocess);
@@ -347,6 +420,8 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
     tsignal->SetBranchAddress("evt_tag_dielectron_promptfinal",&evt_tag_dielectron_promptfinal);
     tsignal->SetBranchAddress("dilep_pt_FSRgammaDRp1_gen_ispromptfinal",&dilep_pt_FSRgammaDRp1_gen_ispromptfinal);
     tsignal->SetBranchAddress("dilep_mass_FSRgammaDRp1_gen_ispromptfinal",&dilep_mass_FSRgammaDRp1_gen_ispromptfinal);
+    tsignal->SetBranchAddress("dilep_pt_FSRgamma_gen_ispromptfinal",&dilep_pt_FSRgamma_gen_ispromptfinal);
+    tsignal->SetBranchAddress("dilep_mass_FSRgamma_gen_ispromptfinal",&dilep_mass_FSRgamma_gen_ispromptfinal);
     tsignal->SetBranchAddress("evt_weight_total_gen",&evt_weight_total_gen);
 
     nentries=tsignal->GetEntries();
@@ -359,8 +434,8 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         TH1* hDYPtReweighted_temp;
         TH1* hDYMassReweighted_temp;
         cout << "Histogram created using TUnfold package!" << endl;
-        hDYPtReweighted_temp = pt_binning_Rec->CreateHistogram("hDYReweighted_temp");
-        hDYMassReweighted_temp = mass_binning_Rec->CreateHistogram("hDYMassReweighted_temp");
+        hDYPtReweighted_temp = pt_binning->CreateHistogram("hDYReweighted_temp");
+        hDYMassReweighted_temp = mass_binning->CreateHistogram("hDYMassReweighted_temp");
         TH1* hZptWeight_temp = NULL;
         if(iter > 0)
         {
@@ -368,10 +443,9 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         }
         if(iter==0)
         {
-            hDYPtBfReweighted_from_tree = pt_binning_Rec->CreateHistogram("hDYPtBfReweighted_from_tree");
-            hDYMassBfReweighted_from_tree = mass_binning_Rec->CreateHistogram("hDYMassBfReweighted_from_tree");
+            hDYPtBfReweighted_from_tree = pt_binning->CreateHistogram("hDYPtBfReweighted_from_tree");
+            hDYMassBfReweighted_from_tree = mass_binning->CreateHistogram("hDYMassBfReweighted_from_tree");
         }
-        
 
         cout<<"Start signal loop"<<endl;
         for(Long64_t i=0;i<nentries;i++)
@@ -380,19 +454,38 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
             tsignal->GetEntry(i);
             if(i%10000000==0) cout<<i<< " /" << nentries << " (" << (double)(100.*i/nentries) << "%)" << endl;
 
-            Double_t GenZpt = 0., GenZmass = 0.;          
+            Double_t truthZpt = 0., truthZmass = 0.;          
+            Double_t measuredZpt = 0., measuredZmass = 0.;
             if(isElectron && !evt_tag_dielectron_promptfinal) continue;
             if(!isElectron && !evt_tag_dimuon_promptfinal) continue;
             // No tautau event saved in the input tree
+            //
+            measuredZmass = dilep_mass_rec;
+            measuredZpt = dilep_pt_rec;
 
-            GenZpt   = dilep_pt_FSRgammaDRp1_gen_ispromptfinal;
-            GenZmass = dilep_mass_FSRgammaDRp1_gen_ispromptfinal;
+            truthZmass = dilep_mass_FSRgammaDRp1_gen_ispromptfinal;
+            truthZpt   = dilep_pt_FSRgammaDRp1_gen_ispromptfinal;
 
-            if(GenZpt < 0 || GenZmass < 0 ) continue;
+            if(!isDetUnfold)  
+            {
+                measuredZmass = dilep_mass_FSRgammaDRp1_gen_ispromptfinal;
+                measuredZpt = dilep_pt_FSRgammaDRp1_gen_ispromptfinal;
 
+                truthZmass = dilep_mass_FSRgamma_gen_ispromptfinal;
+                truthZpt   = dilep_pt_FSRgamma_gen_ispromptfinal;
+            }
+
+            if(truthZpt < 0 || truthZmass < 0 ) continue;
 
             bool event_selection = evt_tag_analysisevnt_sel_rec && evt_tag_dielectron_rec && evt_tag_pass_kinematic_cut_el_FSRgammaDRp1_gen;
             Double_t totWeight = evt_weight_total_gen*evt_weight_total_rec*evt_weight_recoSF_rec*evt_weight_idSF_rec*evt_weight_trigSF_rec*evt_weight_trigSFDZ_rec;
+
+            if(!isDetUnfold)
+            {
+                event_selection = evt_tag_pass_kinematic_cut_el_FSRgammaDRp1_gen && evt_tag_pass_kinematic_cut_el_FSRgamma_gen;    
+                totWeight = evt_weight_total_gen; 
+            } 
+
             if(!isElectron)
             {
                 event_selection = evt_tag_analysisevnt_sel_rec && evt_tag_dimuon_rec && evt_tag_pass_kinematic_cut_mu_FSRgammaDRp1_gen;
@@ -403,21 +496,22 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
             {
                 double low_mass = 15.;
                 double high_mass = 3000.;
-                if(dilep_mass_rec > low_mass && dilep_mass_rec < high_mass && dilep_pt_rec < 3000. && 
-                    GenZmass > low_mass && GenZmass < high_mass && GenZpt < 3000.) // TODO add generator requirement 
+
+                if(measuredZmass > low_mass && measuredZmass < high_mass && measuredZpt < 3000. && 
+                    truthZmass > low_mass && truthZmass < high_mass && truthZpt < 3000.) // TODO add generator requirement 
                 {
                     //     
-                    //if( GenZpt > 100.) GenZpt = 99.9;
+                    //if( truthZpt > 100.) truthZpt = 99.9;
             
                     int bin;
-                    //double zpt_weight = fitFcn->Eval(GenZpt); // get Z pt weight from the previous fit
+                    //double zpt_weight = fitFcn->Eval(truthZpt); // get Z pt weight from the previous fit
                     double zpt_weight = 1.;
-                    bin = pt_binning_Rec->GetGlobalBinNumber(GenZpt, GenZmass);
+                    bin = pt_binning->GetGlobalBinNumber(truthZpt, truthZmass);
                     zpt_weight = hZptWeight_for_next_iteration->GetBinContent(bin);
                     if(zpt_weight == 0 ) zpt_weight = 1.;
 
-                    int recBin = pt_binning_Rec->GetGlobalBinNumber(dilep_pt_rec, dilep_mass_rec);
-                    int recBin_mass = mass_binning_Rec->GetGlobalBinNumber(dilep_mass_rec, dilep_pt_rec);
+                    int recBin = pt_binning->GetGlobalBinNumber(measuredZpt, measuredZmass);
+                    int recBin_mass = mass_binning->GetGlobalBinNumber(measuredZmass, measuredZpt);
                     hDYPtReweighted_temp->Fill(recBin, totWeight*zpt_weight);
 
                     if(iter > 0)
@@ -442,10 +536,10 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         iter_.Form("%d",iter);
         previous_iter_.Form("%d",iter);
 
-        const TVectorD* tvecd = pt_binning_Rec->GetDistributionBinning(1);
+        const TVectorD* tvecd = pt_binning->GetDistributionBinning(1);
         int nMassBins = tvecd->GetNrows() - 1; // [50., 64., ] 
-        if(pt_binning_Rec->HasUnderflow(1)) nMassBins++;
-        if(pt_binning_Rec->HasOverflow(1)) nMassBins++;
+        if(pt_binning->HasUnderflow(1)) nMassBins++;
+        if(pt_binning->HasOverflow(1)) nMassBins++;
 
         int startBin = 1;
         int endBin = 1;
@@ -460,7 +554,7 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         cout << "norm: " << norm_ << endl;
         hDYPtReweighted_temp->SetName("hDYReweighted_iter" + iter_); // Reweighted DY MC at the current iteration
 
-        TH1* hNormalisation_temp = pt_binning_Rec->CreateHistogram("hNormalisation_temp");
+        TH1* hNormalisation_temp = pt_binning->CreateHistogram("hNormalisation_temp");
         hNormalisation_temp->Sumw2();
         hNormalisation_temp->SetName("hNormalization_iter" + iter_);
         //cout << "bin n: " << hDYPtReweighted_temp->GetXaxis()->GetNbins() << endl;
@@ -468,14 +562,20 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         {
             int bin_number;
             // Regular expression, #[^\s]+ \(Rec_Pt:mass\[[^\s]+]:pt\[[^\s]+]\) 
-            string temp_cuurent_bin_name(pt_binning_Rec->GetBinName(ibin));
+            string temp_cuurent_bin_name(pt_binning->GetBinName(ibin));
             string current_mass_bin_name = temp_cuurent_bin_name.substr(temp_cuurent_bin_name.find("mass[")+5, temp_cuurent_bin_name.find("]:pt[")-temp_cuurent_bin_name.find("mass[")-5);
-            string temp_next_bin_name(pt_binning_Rec->GetBinName(ibin+1));
-            string next_mass_bin_name = temp_next_bin_name.substr(temp_next_bin_name.find("mass[")+5, temp_next_bin_name.find("]:pt[")-temp_next_bin_name.find("mass[")-5);
 
-            //cout << pt_binning_Rec->GetBinName(ibin) << " mass bin name: " << current_mass_bin_name << endl;
+            string temp_next_bin_name;
+            string next_mass_bin_name; 
+            if(ibin < hZptWeight_for_next_iteration->GetXaxis()->GetNbins())
+            {
+                temp_next_bin_name = (pt_binning->GetBinName(ibin+1));
+                next_mass_bin_name = temp_next_bin_name.substr(temp_next_bin_name.find("mass[")+5, temp_next_bin_name.find("]:pt[")-temp_next_bin_name.find("mass[")-5);
+            }
+
+            //cout << pt_binning->GetBinName(ibin) << " mass bin name: " << current_mass_bin_name << endl;
             //cout << mass_bin << " " << pt_bin << endl;
-            if(next_mass_bin_name.compare(current_mass_bin_name) != 0)
+            if(ibin == hDYPtReweighted_temp->GetXaxis()->GetNbins() || next_mass_bin_name.compare(current_mass_bin_name) != 0)
             {
 
                 denominator_sum += hDYPtReweighted_temp->GetBinContent(ibin);
@@ -516,7 +616,7 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         // Update reweight histogram
         TH1* hZptWeight_update_temp=(TH1*) hDataPt->Clone("hZptWeight_update_temp_iter" + iter_);  ;
 
-        TH1* hNormalisation_temp_ = pt_binning_Rec->CreateHistogram("hNormalisation_temp_");
+        TH1* hNormalisation_temp_ = pt_binning->CreateHistogram("hNormalisation_temp_");
         hNormalisation_temp_->Sumw2();
         startBin = 1; 
         endBin = 1;
@@ -526,14 +626,19 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
         {
             int bin_number;
             // Regular expression, #[^\s]+ \(Rec_Pt:mass\[[^\s]+]:pt\[[^\s]+]\) 
-            string temp_cuurent_bin_name(pt_binning_Rec->GetBinName(ibin));
+            string temp_cuurent_bin_name(pt_binning->GetBinName(ibin));
             string current_mass_bin_name = temp_cuurent_bin_name.substr(temp_cuurent_bin_name.find("mass[")+5, temp_cuurent_bin_name.find("]:pt[")-temp_cuurent_bin_name.find("mass[")-5);
-            string temp_next_bin_name(pt_binning_Rec->GetBinName(ibin+1));
-            string next_mass_bin_name = temp_next_bin_name.substr(temp_next_bin_name.find("mass[")+5, temp_next_bin_name.find("]:pt[")-temp_next_bin_name.find("mass[")-5);
 
-            //cout << pt_binning_Rec->GetBinName(ibin) << " mass bin name: " << current_mass_bin_name << endl;
+            string temp_next_bin_name;
+            string next_mass_bin_name; 
+            if(ibin < hZptWeight_update_temp->GetXaxis()->GetNbins())
+            {
+                temp_next_bin_name = (pt_binning->GetBinName(ibin+1));
+                next_mass_bin_name = temp_next_bin_name.substr(temp_next_bin_name.find("mass[")+5, temp_next_bin_name.find("]:pt[")-temp_next_bin_name.find("mass[")-5);
+            }
+            //cout << pt_binning->GetBinName(ibin) << " mass bin name: " << current_mass_bin_name << endl;
             //cout << mass_bin << " " << pt_bin << endl;
-            if(next_mass_bin_name.compare(current_mass_bin_name) != 0)
+            if(ibin == hZptWeight_update_temp->GetXaxis()->GetNbins() || next_mass_bin_name.compare(current_mass_bin_name) != 0)
             {
 
                 denominator_sum += hZptWeight_update_temp->GetBinContent(ibin);
@@ -571,7 +676,7 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
 
         for(int ibin = 1; ibin <= hZptWeight_for_next_iteration->GetXaxis()->GetNbins(); ibin++)  
         {
-            string temp_cuurent_bin_name(pt_binning_Rec->GetBinName(ibin));
+            string temp_cuurent_bin_name(pt_binning->GetBinName(ibin));
             string current_mass_bin_name = temp_cuurent_bin_name.substr(temp_cuurent_bin_name.find("mass[")+5, temp_cuurent_bin_name.find("]:pt[")-temp_cuurent_bin_name.find("mass[")-5);
             string current_pt_bin_name = temp_cuurent_bin_name.substr(temp_cuurent_bin_name.find(":pt[")+4, temp_cuurent_bin_name.find("])")-temp_cuurent_bin_name.find(":pt[")-4);
             cout << "current_mass_bin_name: " << current_mass_bin_name << " current_pt_bin_name: " << current_pt_bin_name << endl;
@@ -606,7 +711,7 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
 
         //delete tsignal;
     }
-    while(iter != 2); // TODO add condition to exit
+    while(iter != 1); // TODO add condition to exit
 
     outfile.cd();
     iter_.Form("%d",iter+1);
@@ -618,4 +723,3 @@ void GetZptReweight(bool isElectron = true, int massBin = 2, TString histFile = 
     outfile.Close();
 
 }
-
